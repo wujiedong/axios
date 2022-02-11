@@ -1,0 +1,94 @@
+<!--
+ * @Author: your name
+ * @Date: 2022-02-11 10:17:20
+ * @LastEditTime: 2022-02-11 15:19:27
+ * @LastEditors: Please set LastEditors
+ * @Description: 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ * @FilePath: \axios\examples\重复请求\index.html
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <button id="btnA">按钮a</button>
+  <button id="btnB">按钮b</button>
+<script src="../../dist/axios.min.js"></script>
+<script>
+  const btnB = document.getElementById('btnB')
+  btnB.addEventListener('click', () => {
+    axios.get('http://127.0.0.1:8080/name/wujiedong1', {
+    }).then((response) => {
+      console.log(response.data)
+    })
+  })
+  
+  const btnA = document.getElementById('btnA')
+  const reqSignMap = new Map()
+  
+  axios.interceptors.request.use(config => {
+    const reqSign = initReqSingleSign(config)
+    addReqSignMap(config, reqSign)
+    console.log('请求前置拦截器', config)
+    return config
+  })
+  axios.interceptors.response.use(response => {
+    const { config } = response
+    const reqSign = initReqSingleSign(config)
+    delReqSignMap(reqSign)
+    console.log('请求后置拦截器', response.config)
+    return response
+  })
+
+  const CancelToken = axios.CancelToken
+  // const source = CancelToken.source()
+  btnA.addEventListener('click', () => {
+    axios.get('http://127.0.0.1:8080/name/wujiedong', {
+    }).then((response) => {
+      console.log(response.data)
+    })
+  })
+  // setTimeout(() => {
+  //   source.cancel('Operation canceled by the user.')
+  // }, 3000)
+  
+
+  function initReqSingleSign(config) {
+    const { method, url, data } = config
+    return `${url}~${method}~${data}`
+  }
+
+  function addReqSignMap(config, reqSign){
+    console.log('addReqSignMap--->', reqSignMap)
+    if(!reqSignMap.has(reqSign)) { // 第一次请求
+      const cancels = []
+      config.cancelToken = new CancelToken(cancel => {
+        cancels.push(cancel)
+        reqSignMap.set(reqSign, cancels)
+      })
+    } else { // 第>1次请求
+      config.cancelToken = new CancelToken(cancel => {
+        const cancels = reqSignMap.get(reqSign)
+        cancels.push(cancel)
+      })
+      console.log('取消请求--->', reqSignMap)
+      const cancels = reqSignMap.get(reqSign)
+      for(let i = 1; i < cancels.length; i++) {
+        cancels[i](reqSign)
+      }
+      // const cancel = reqSignMap.get(reqSign)
+      // cancel()
+   }
+  }
+
+  function delReqSignMap(reqSign){
+    if(!reqSignMap.has(reqSign)) return
+    reqSignMap.delete(reqSign)
+  }
+</script>
+</body>
+</html>
