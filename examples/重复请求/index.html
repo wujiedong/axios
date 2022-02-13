@@ -1,9 +1,9 @@
 <!--
- * @Author: your name
+ * @Author: wujiedong
  * @Date: 2022-02-11 10:17:20
  * @LastEditTime: 2022-02-11 15:19:27
  * @LastEditors: Please set LastEditors
- * @Description: 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ * @Description: 同一个接口,在接口未response之前,多次点击发送,只有第一次请求有效,之后请求全部无效
  * @FilePath: \axios\examples\重复请求\index.html
 -->
 <!DOCTYPE html>
@@ -28,14 +28,18 @@
   })
   
   const btnA = document.getElementById('btnA')
-  const reqSignMap = new Map()
+  // 所有请求,都需要这里,key:请求唯一标识  value:维护一个相同key请求下的多个可取消请求数组
+  const reqSignMap = new Map() 
   
+  // 请求前置拦截器
   axios.interceptors.request.use(config => {
     const reqSign = initReqSingleSign(config)
     addReqSignMap(config, reqSign)
     console.log('请求前置拦截器', config)
     return config
   })
+
+  // 响应之后拦截器
   axios.interceptors.response.use(response => {
     const { config } = response
     const reqSign = initReqSingleSign(config)
@@ -45,29 +49,25 @@
   })
 
   const CancelToken = axios.CancelToken
-  // const source = CancelToken.source()
   btnA.addEventListener('click', () => {
     axios.get('http://127.0.0.1:8080/name/wujiedong', {
     }).then((response) => {
       console.log(response.data)
     })
   })
-  // setTimeout(() => {
-  //   source.cancel('Operation canceled by the user.')
-  // }, 3000)
   
-
+  // 生成请求唯一标识
   function initReqSingleSign(config) {
     const { method, url, data } = config
     return `${url}~${method}~${data}`
   }
 
+  // 向map容器中添加
   function addReqSignMap(config, reqSign){
-    console.log('addReqSignMap--->', reqSignMap)
     if(!reqSignMap.has(reqSign)) { // 第一次请求
       const cancels = []
       config.cancelToken = new CancelToken(cancel => {
-        cancels.push(cancel)
+        cancels.push(cancel) // cancel是一个可取消请求的函数
         reqSignMap.set(reqSign, cancels)
       })
     } else { // 第>1次请求
@@ -75,16 +75,14 @@
         const cancels = reqSignMap.get(reqSign)
         cancels.push(cancel)
       })
-      console.log('取消请求--->', reqSignMap)
       const cancels = reqSignMap.get(reqSign)
       for(let i = 1; i < cancels.length; i++) {
-        cancels[i](reqSign)
+        cancels[i](reqSign) // 数组中,第2个开始,取消之后重复点击请求
       }
-      // const cancel = reqSignMap.get(reqSign)
-      // cancel()
    }
   }
 
+  // 请求响应之后,来删除map中对应item
   function delReqSignMap(reqSign){
     if(!reqSignMap.has(reqSign)) return
     reqSignMap.delete(reqSign)
